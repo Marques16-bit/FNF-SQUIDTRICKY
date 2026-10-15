@@ -1,0 +1,57 @@
+name: Build Android
+
+on:
+  workflow_dispatch:   # cria o botão "Run workflow" na aba Actions
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: 4.2.5
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 11
+
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r21e
+
+      # Libs da era do Kade Engine 1.5/1.6 (Lime 7.9.0 + OpenFL 9.1.0 + Flixel 4.11.0).
+      # newgrounds, actuate e polymod ficam sem versao fixa: se algum quebrar, eu travo a versao.
+      - name: Instalar libs
+        run: |
+          haxelib setup ~/haxelib
+          haxelib install lime 7.9.0
+          haxelib install openfl 9.1.0
+          haxelib install flixel 4.11.0
+          haxelib install flixel-addons 2.11.0
+          haxelib install flixel-ui 2.3.3
+          haxelib install hscript 2.4.0
+          haxelib install actuate
+          haxelib install newgrounds
+          haxelib git polymod https://github.com/larsiusprime/polymod.git
+          haxelib run lime setup -alias -y
+          haxelib list
+
+      - name: Configurar Lime para Android
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          haxelib run lime config ANDROID_SDK $ANDROID_HOME
+          haxelib run lime config ANDROID_NDK_ROOT ${{ steps.ndk.outputs.ndk-path }}
+          haxelib run lime config JAVA_HOME $JAVA_HOME
+          haxelib run lime config ANDROID_SETUP true
+
+      - name: Compilar APK
+        run: haxelib run lime build android -final
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: export/release/android/bin/app/build/outputs/apk/debug/*.apk
